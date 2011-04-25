@@ -1,5 +1,6 @@
-GORM\: batch importing large datasets and a performance benchmarking app
-------------------------------------------------------------------------	 
+
+GORM : batch importing large datasets and a performance benchmarking app
+===================================	 
 
 Summary
 --------
@@ -17,15 +18,12 @@ The GPars is the Groovy way to do parallel processing so you can take advantage 
 Its theoretically perfect for splitting up batch process to take advantage of validation and processing in your cores will keeping the statments 
 firing into your database.
 
-
-LoaderService has the different benchmarks to run and its called form Bootsrap using when I do run-war
-
 Key conclusions
 -------
 
 The 4 key factors I have discovered so far to really speed things up are..
 
-1. Use GPars so you are not firing on the proverbial 1 cylinder. If you have 8 cores then use them. 
+1. Use GPars so you are not firing on the proverbial 1 cylinder. 
 2. follow the concepts in the hibernate suggestions here in http://docs.jboss.org/hibernate/core/3.3/reference/en/html/batch.html for chaps 13.1 and 13.2 and set your jdbc.batch_size then go to Ted's article here http://naleid.com/blog/2009/10/01/batch-import-performance-with-grails-and-mysql/
 3. use small transaction batches and keep them the same size as the jdbc.batch_size. DO NOT (auto)commit on every insert
 4. Don't use GORM data binding if you can avoid it.
@@ -35,31 +33,32 @@ The 4 key factors I have discovered so far to really speed things up are..
 
 My Bench Mark Results and details
 -------
-LoaderService has the different benchmarks to run and its called form Bootsrap using when I do run-war
+LoaderService has the different benchmarks to run and its called form Bootstrap using when I do run-war
 
 * 110k+ CSV records on a macbook pro 2.8 dual core. 1024mb ram was given to the VM and these were run using run-war
+* I'm using MySql as the DB and its installed on my mac too so GPars can't really get all the cores
 * all of these have jdbc.batch_size = 50 and use the principals from #2 above and flush/clear every 50 rows
 * The test where the batch insert happen in a single transaction can't be tested with GPars since a single transaction can't span multiple threads
 * Databinding is NOT used on the first 3 tests,except for the last test. You can see that using Databinding pretty much doubles the time for both the normal way and using GPars
 * the winner seems to be gpars and batched (smaller chunks) transactions
 
-| | Normal	| with GPars|
-|--------------------------|--------|------------
-Single transaction        | 91 s   | Not applicable			
-||
-Commit (auto) each record | 298 s  | 98 s
+|                            | Normal  | with GPars|
+|----------------------------|---------|------------
+| Single transaction         | 91 s    | Not applicable			
+| | |
+| Commit Tran (auto) each record  | 298 s   | 98 s
+|  |  |
+| Batched Transactions       | 92 s    | **49 s**
+| Commit every 50 records |  |
+|  |  |
+| Batch Tran every 50        | 190 s    | 94 s
+| Using Databinding	|  |
 
-
-Batched Transactions
-Commit every 50 records		94 s				49 s <--clear winner
-
-Batch Tran every 50
-Using Databinding			190 s			94 s
 
 TODOs
 --------
-* My suspicion is that 
-
+* My hunch is that GPars difference will be even more significant on a quad with HT. Could use some help here
+* 
 
 More background and reading
 ---------------
