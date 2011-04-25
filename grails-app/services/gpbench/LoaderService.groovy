@@ -15,10 +15,10 @@ class LoaderService {
 	def csvService
 	def sessionFactory
 	def saverService
-	def saveUsingPropsService
+	def saveWithBindDataService
 	def saveWithSimpleJdbcService
 
-	def batchSize = 50 //this should match the hibernate.jdbc.batch_size in datasources
+	def batchSize = 1000 //this should match the hibernate.jdbc.batch_size in datasources
 	
 	def loadAllFiles(String methodName) {	
 		def startTime = logBenchStart(methodName)
@@ -109,7 +109,7 @@ class LoaderService {
 			reader.eachParallel { batchList ->
 				City.withTransaction{
 					batchList.each{ map ->
-						saveUsingPropsService."save$name"(map)
+						saveWithBindDataService."save$name"(map)
 					}
 					cleanUpGorm()
 				} //end transaction
