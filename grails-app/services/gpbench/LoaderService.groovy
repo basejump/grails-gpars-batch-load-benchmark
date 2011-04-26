@@ -5,6 +5,7 @@ import static groovyx.gpars.GParsPool.withPool
 import org.springframework.transaction.annotation.*
 import groovy.sql.Sql
 import org.springframework.jdbc.core.simple.SimpleJdbcInsert
+import org.springframework.jdbc.core.simple.SimpleJdbcTemplate
 import org.grails.plugins.csv.CSVMapReader
 
 class LoaderService {
@@ -18,9 +19,10 @@ class LoaderService {
 	def saveWithBindDataService
 	def saveWithSimpleJdbcService
 
-	def batchSize = 1000 //this should match the hibernate.jdbc.batch_size in datasources
+	def batchSize = 100 //this should match the hibernate.jdbc.batch_size in datasources
 	
-	def loadAllFiles(String methodName) {	
+	def loadAllFiles(String methodName) {
+		//sessionFactory.getStatistics().setStatisticsEnabled(true)	
 		def startTime = logBenchStart(methodName)
 		
 		"${methodName}"("Country")
@@ -80,7 +82,7 @@ class LoaderService {
 	def load_GPars_single_rec_per_thread_transaction(name,csvFile=null) {
 		def reader = new File("resources/${csvFile?:name}.csv").toCsvMapReader()
 		
-		withPool(8){
+		withPool(4){
 			reader.eachParallel { map ->
 				saverService."save$name"(map)
 			}
@@ -88,9 +90,10 @@ class LoaderService {
 	}
 	
 	def load_GPars_batched_transactions_per_thread(name,csvFile=null) {
+		println "processing $name"
 		def reader = new File("resources/${csvFile?:name}.csv").toCsvMapReader([batchSize:batchSize])
 		
-		withPool(8){
+		withPool(4){
 			reader.eachParallel { batchList ->
 				City.withTransaction{
 					batchList.each{ map ->
@@ -100,12 +103,20 @@ class LoaderService {
 				} //end transaction
 			}
 		}
+		
+		//int queryCacheHitCount  = sessionFactory.getStatistics().getQueryCacheHitCount();
+		//int queryCacheMissCount = sessionFactory.getStatistics().getQueryCacheMissCount();
+		//println "Querycache hit $queryCacheHitCount and missed $queryCacheMissCount"
+		
+		//int new2MissCount = sessionFactory.getStatistics().getSecondLevelCacheStatistics("org.hibernate.cache.StandardQueryCache").getMissCount();
+		//int new2HitCount = sessionFactory.getStatistics().getSecondLevelCacheStatistics("org.hibernate.cache.StandardQueryCache").getHitCount();
+		//println "Second levelCache hit $new2HitCount and missed $new2MissCount"
 	}
 	
 	def load_GPars_batched_transactions_per_threadns_databinding(name,csvFile=null) {
 		def reader = new File("resources/${csvFile?:name}.csv").toCsvMapReader([batchSize:batchSize])
 		
-		withPool(8){
+		withPool(4){
 			reader.eachParallel { batchList ->
 				City.withTransaction{
 					batchList.each{ map ->
@@ -119,12 +130,23 @@ class LoaderService {
 
 	//@Transactional
 	def load_SimpleJdbcInsert(name,csvFile=null) {	
-		def rows = csvService.importFromCsv(new File("resources/${csvFile?:name}.csv"))
+		saveWithSimpleJdbcService.load_SimpleJdbcInsert(name,csvFile)
+/*		def reader = new File("resources/${csvFile?:name}.csv").toCsvMapReader()
 		
 		def sji = new SimpleJdbcInsert(dataSource)
 		sji.withTableName(name.toLowerCase())
-		rows.each{ row ->
+		reader.each{ row ->
 			saveWithSimpleJdbcService."save$name"(row,sji)
+		}*/
+	}
+	
+	def load_GPars_SimpleJdbcInsert(name,csvFile=null) {			
+		def reader = new File("resources/${csvFile?:name}.csv").toCsvMapReader([batchSize:batchSize])
+		
+		withPool(4){
+			reader.eachParallel { batchList ->
+				saveWithSimpleJdbcService.loadList(name,batchList) 
+			}
 		}
 	}
 	
@@ -136,11 +158,12 @@ class LoaderService {
 		propertyInstanceMap.get().clear()
 	}
 	
+	@Transactional
 	def truncateTables() {
 		Sql sql = new Sql(dataSource)
       	sql.execute("truncate table city")
 		sql.execute("truncate table region")
-		sql.execute("truncate table country")
+		sql.execute("delete from country")
 		sql.execute("RESET QUERY CACHE") //reset mysql query cache to try and be fair
 
 		//do the following if using HSQLDB

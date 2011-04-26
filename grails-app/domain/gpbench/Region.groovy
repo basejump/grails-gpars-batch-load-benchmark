@@ -1,4 +1,4 @@
-package gpbench;
+package gpbench
 
 class Region {
 

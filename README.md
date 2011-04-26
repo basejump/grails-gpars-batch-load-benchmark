@@ -35,7 +35,7 @@ My Bench Mark Results and details
 -------
 LoaderService has the different benchmarks to run and its called form Bootstrap using when I do run-war
 
-* 110k+ CSV records on a macbook pro 2.8 dual core. 1024mb ram was given to the VM and these were run using run-war
+* 115k CSV records on a macbook pro 2.8 dual core. 1024mb ram was given to the VM and these were run using prod run-war
 * I'm using MySql as the DB and its installed on my mac too so GPars can't really get all the cores
 * all of these have jdbc.batch_size = 50 and use the principals from #2 above and flush/clear every 50 rows
 * The test where the batch insert happen in a single transaction can't be tested with GPars since a single transaction can't span multiple threads
@@ -53,6 +53,8 @@ LoaderService has the different benchmarks to run and its called form Bootstrap 
 |  |  |
 | Batch Tran every 50        | 190 s    | 94 s
 | Using Databinding	|  |
+|  |  |
+| Spring's SimpleJdbc         | 37 s    | **27 s**
 
 
 TODOs
