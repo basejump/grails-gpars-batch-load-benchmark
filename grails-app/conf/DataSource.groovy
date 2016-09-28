@@ -19,7 +19,7 @@ environments {
 				dialect = 'org.hibernate.dialect.MySQL5InnoDBDialect'
 				driverClassName = 'com.mysql.jdbc.Driver'
 				username = 'root'
-				password = System.properties['db.password']
+				password = System.properties['db.password'] ?: 'root'
 				pooled = true
 				url = 'jdbc:mysql://127.0.0.1/gpbench'
 				//loggingSql = true
