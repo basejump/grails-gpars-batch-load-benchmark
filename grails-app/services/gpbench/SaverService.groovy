@@ -1,11 +1,7 @@
 package gpbench
 
-import groovyx.gpars.GParsPool;
-import static groovyx.gpars.GParsPool.withPool
-import org.springframework.transaction.annotation.*
-
 class SaverService {
-	static transactional = false 
+	static transactional = false
 
 	void saveCountry(row) {
 		Country.withTransaction {

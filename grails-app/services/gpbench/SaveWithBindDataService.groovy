@@ -1,10 +1,5 @@
 package gpbench
 
-import groovyx.gpars.GParsPool;
-import static groovyx.gpars.GParsPool.withPool
-import static Region.withTransaction
-import org.springframework.transaction.annotation.*
-
 class SaveWithBindDataService {
 	static transactional = false 
 
@@ -50,11 +45,13 @@ class SaveWithBindDataService {
 			if( row.FIPS104.equals('--')){
 				row.FIPS104 == null;
 			}
+
 			def c = new Country(
 				geoWorldMapId: row.CountryId,
 				code: row.Country,
 				fips104: row.FIPS104)
 
+			c.id = row.CountryId as Long
 			c.save();
 		}
 	}
