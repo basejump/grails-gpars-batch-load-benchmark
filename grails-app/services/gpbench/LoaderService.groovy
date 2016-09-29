@@ -1,50 +1,62 @@
 package gpbench
 
 import grails.transaction.Transactional
+import groovy.sql.GroovyRowResult
+import groovy.sql.Sql
+import org.hibernate.SessionFactory
+import org.springframework.core.io.FileSystemResource
+import org.springframework.core.io.Resource
 import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.jdbc.datasource.init.ScriptUtils
+
+import java.sql.Connection
 
 import static groovyx.gpars.GParsPool.withPool
 
 class LoaderService {
 	static transactional = false 
 	
-	//inject beans
-	def dataSource
-	def csvService
-	def sessionFactory
-	SaverService saverService
-	SaveWithBindDataService saveWithBindDataService
-	SaveWithSimpleJdbcService saveWithSimpleJdbcService
+	SessionFactory sessionFactory
 
 	def persistenceInterceptor
 
+	def dataSource
 	JdbcTemplate jdbcTemplate
+
+	RegionService regionService
+	CityService cityService
+	CountryService countryService
 
 	def batchSize = 100 //this should match the hibernate.jdbc.batch_size in datasources
 
 	void runBenchMark() {
 		println "Running benchmark"
 
-		loadAllFiles('load_GPars_batched_transactions_per_threadns_databinding')
-		loadAllFiles('load_SimpleJdbcInsert')
+
+		loadAllFiles('load_GPars_batched_transactions_per_thread_databinding')
 		loadAllFiles('load_GPars_SimpleJdbcInsert')
-		loadAllFiles('load_batched_transactions')
-		loadAllFiles('load_batched_transactions_databinding')
 		loadAllFiles('load_GPars_single_rec_per_thread_transaction')
 		loadAllFiles('load_commit_each_save')
+		loadAllFiles('load_SimpleJdbcInsert')
+		loadAllFiles('load_batched_transactions')
+		loadAllFiles('load_batched_transactions_databinding')
+		
+		loadAllFiles('load_from_table')
+		loadAllFiles('load_from_table_gparse')
 
 		/*
 		def r = benchmark {
 			//'GPars_batched_transactions_per_threadns_databinding' { loadAllFiles('load_GPars_batched_transactions_per_threadns_databinding') }
-			'SimpleJdbcInsert' { loadAllFiles('load_SimpleJdbcInsert')}
-			'batched_transactions' { loadAllFiles('load_batched_transactions')}
-			'batched_transactions_databinding' { loadAllFiles('load_batched_transactions_databinding')}
-			'GPars_SimpleJdbcInsert' { loadAllFiles('load_GPars_SimpleJdbcInsert')}
-			'GPars_batched_transactions_per_threadns_databinding' { loadAllFiles('load_GPars_batched_transactions_per_threadns_databinding')}
+			//'SimpleJdbcInsert' { loadAllFiles('load_SimpleJdbcInsert')}
+			//'batched_transactions' { loadAllFiles('load_batched_transactions')}
+			//'batched_transactions_databinding' { loadAllFiles('load_batched_transactions_databinding')}
+			//'GPars_SimpleJdbcInsert' { loadAllFiles('load_GPars_SimpleJdbcInsert')}
+			//'GPars_batched_transactions_per_threadns_databinding' { loadAllFiles('load_GPars_batched_transactions_per_threadns_databinding')}
 		}
 
 		r.prettyPrint()
-	*/
+		*/
+
 	}
 
 	def loadAllFiles(String methodName) {
@@ -66,112 +78,188 @@ class LoaderService {
 		}
 
 	}
-	
-	def load_single_transaction(name,csvFile=null) {	
-		def reader = new File("resources/${csvFile?:name}.csv").toCsvMapReader()
-		City.withTransaction{
-			reader.eachWithIndex { Map row, index ->
-				saverService."save$name"(row)
-				cleanUpGorm()
-				if (index % batchSize == 0) cleanUpGorm()
-			}
-		}
+
+	def getService(String name) {
+		name = name.substring(0,1).toLowerCase() + name.substring(1);
+		return this."${name}Service"
 	}
-	
-	def load_commit_each_save(name,csvFile=null) {	
-		def reader = new File("resources/${csvFile?:name}.csv").toCsvMapReader()
+
+	@Transactional
+	def load_single_transaction(name, csvFile = null) {
+		def reader = new File("resources/${csvFile ?: name}.csv").toCsvMapReader()
+
+		def service = getService(name)
+
 		reader.eachWithIndex { Map row, index ->
-			saverService."save$name"(row)
-			cleanUpGorm()
+			service.insertWithoutDataBinding(row)
 			if (index % batchSize == 0) cleanUpGorm()
 		}
 	}
 	
-	def load_batched_transactions(name,csvFile=null) {
+	def load_commit_each_save(name, csvFile=null) {
+		def reader = new File("resources/${csvFile?:name}.csv").toCsvMapReader()
+
+		def service = getService(name)
+		reader.eachWithIndex { Map row, index ->
+			service.insertWithoutDataBinding(row)
+			if (index % batchSize == 0) cleanUpGorm()
+		}
+	}
+	
+	def load_batched_transactions(name, csvFile=null) {
 		def batchedList = new File("resources/${csvFile?:name}.csv").toCsvMapReader([batchSize:batchSize])
-		batchedList.each { rowSet ->
-			City.withTransaction{
-				rowSet.each{row->
-					saverService."save$name"(row)
+		def service = getService(name)
+
+		batchedList.each {List rowSet ->
+			City.withTransaction {
+				rowSet.each{ Map row->
+					service.insertWithoutDataBinding(row)
 				}
-				cleanUpGorm()
-			} //end transaction
+			}
+			cleanUpGorm()
 		}
 	}
 
 	def load_batched_transactions_databinding(name, csvFile = null) {
 		def batchedList = new File("resources/${csvFile ?: name}.csv").toCsvMapReader([batchSize: batchSize])
+		def service = getService(name)
+
 		batchedList.each { rowSet ->
 			City.withTransaction {
 				rowSet.each { row ->
-					saveWithBindDataService."save$name"(row)
+					service.insertWithDataBinding(row)
 				}
-			} //end transaction
+			}
+
 			cleanUpGorm()
 		}
 	}
 		
 	def load_GPars_single_rec_per_thread_transaction(name,csvFile=null) {
 		def reader = new File("resources/${csvFile?:name}.csv").toCsvMapReader()
+		def service = getService(name)
 		
 		withPool(4){
-			reader.eachParallel { map ->
-				saverService."save$name"(map)
+			reader.eachParallel { Map row ->
+				withPersistence {
+					service.insertWithoutDataBinding(row)
+				}
 			}
 		}
 	}
 	
 	def load_GPars_batched_transactions_per_thread(name,csvFile=null) {
-		println "processing $name"
 		def reader = new File("resources/${csvFile?:name}.csv").toCsvMapReader([batchSize:batchSize])
+		def service = getService(name)
 		
 		withPool(4){
-			reader.eachParallel { batchList ->
-				City.withTransaction{
-					batchList.each{ map ->
-						saverService."save$name"(map)
-					}
-					cleanUpGorm()
-				} //end transaction
-			}
-		}
-		
-		//int queryCacheHitCount  = sessionFactory.getStatistics().getQueryCacheHitCount();
-		//int queryCacheMissCount = sessionFactory.getStatistics().getQueryCacheMissCount();
-		//println "Querycache hit $queryCacheHitCount and missed $queryCacheMissCount"
-		
-		//int new2MissCount = sessionFactory.getStatistics().getSecondLevelCacheStatistics("org.hibernate.cache.StandardQueryCache").getMissCount();
-		//int new2HitCount = sessionFactory.getStatistics().getSecondLevelCacheStatistics("org.hibernate.cache.StandardQueryCache").getHitCount();
-		//println "Second levelCache hit $new2HitCount and missed $new2MissCount"
-	}
-	
-	def load_GPars_batched_transactions_per_threadns_databinding(name,csvFile=null) {
-		def reader = new File("resources/${csvFile?:name}.csv").toCsvMapReader([batchSize:batchSize])
-		
-		withPool(4){
-			reader.eachParallel { batchList ->
+			reader.eachParallel { List batchList ->
 				City.withTransaction {
-					batchList.each{ map ->
-						saveWithBindDataService."save$name"(map)
+					batchList.each{ Map row ->
+						service.insertWithoutDataBinding(row)
 					}
 					cleanUpGorm()
-				} //end transaction
+				}
 			}
 		}
-	}
 
-
-	def load_SimpleJdbcInsert(name,csvFile=null) {	
-		saveWithSimpleJdbcService.load_SimpleJdbcInsert(name,csvFile)
 	}
 	
-	def load_GPars_SimpleJdbcInsert(name,csvFile=null) {			
+	def load_GPars_batched_transactions_per_thread_databinding(name,csvFile=null) {
 		def reader = new File("resources/${csvFile?:name}.csv").toCsvMapReader([batchSize:batchSize])
+		def service = getService(name)
+		
 		withPool(4){
-			reader.eachParallel { batchList ->
-				saveWithSimpleJdbcService.loadList(name,batchList)
+			reader.eachParallel {List batchList ->
+				City.withTransaction {
+					batchList.each{ Map row ->
+						service.insertWithDataBinding(row)
+					}
+					cleanUpGorm()
+				}
 			}
 		}
+	}
+
+
+	def load_SimpleJdbcInsert(name,csvFile=null) {
+		def reader = new File("resources/${csvFile?:name}.csv").toCsvMapReader()
+		def service = getService(name)
+		reader.eachWithIndex { Map row, index ->
+			service.insertWithJdbc(row)
+		}
+	}
+
+	def load_from_table(name, csvFile=null) {
+		Sql sql = new Sql(dataSource)
+		def service = getService(name)
+		List rows = sql.rows("select * from " + "${name}_test".toLowerCase())
+
+		rows.eachWithIndex{ GroovyRowResult row, int index ->
+			service.insertWithSetter(row)
+			if (index % batchSize == 0) cleanUpGorm()
+		}
+	}
+
+	def load_from_table_gparse(name, csvFile=null) {
+		Sql sql = new Sql(dataSource)
+		def service = getService(name)
+		List rows = sql.rows("select * from " + "${name}_test".toLowerCase())
+
+		withPool(4){
+			rows.eachWithIndexParallel {def row, int index ->
+				withPersistence {
+					service.insertWithSetter(row)
+					if (index % batchSize == 0) cleanUpGorm()
+				}
+			}
+		}
+
+	}
+
+	def insertToTestTable(name,csvFile=null) {
+		def reader = new File("resources/${csvFile?:name}.csv").toCsvMapReader()
+		def service = getService(name)
+		reader.eachWithIndex { Map row, index ->
+			service.insetToTestTable(row)
+		}
+	}
+
+
+	def load_GPars_SimpleJdbcInsert(name, csvFile=null) {
+		def reader = new File("resources/${csvFile?:name}.csv").toCsvMapReader([batchSize:batchSize])
+		def service = getService(name)
+
+		withPool(4){
+			reader.eachParallel { List batchList ->
+				withPersistence {
+					batchList.each { Map row ->
+						service.insertWithJdbc(row)
+					}
+				}
+			}
+		}
+
+	}
+
+	//in order to test importing from other table.,
+	// we need a table from which we can load data and insert to domains.
+	//this method created the test talbes and loads seed data in.
+	void loadTestDataForGsqlTest() {
+		try {
+			Resource resource = new FileSystemResource("resources/test-tables.sql");
+			Connection connection = sessionFactory.currentSession.connection()
+			ScriptUtils.executeSqlScript(connection, resource)
+
+			insertToTestTable("Country")
+			insertToTestTable("Region")
+			insertToTestTable("City", "City100k")
+
+		}catch (Exception e) {
+			//e.printStackTrace()
+			//nothing, probaly tables already exist
+		}
+
 
 	}
 	

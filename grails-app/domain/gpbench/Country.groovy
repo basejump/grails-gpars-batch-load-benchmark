@@ -3,13 +3,11 @@ package gpbench
 class Country {
 
 	Integer geoWorldMapId
-
 	String code
 	String fips104
 
 	static mapping = {
 		cache true
-		id generator: 'assigned'
 	}
 
 	static constraints = {
