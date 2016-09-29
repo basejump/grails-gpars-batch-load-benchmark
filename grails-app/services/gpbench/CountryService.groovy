@@ -34,7 +34,7 @@ class CountryService {
 		c.save()
 	}
 
-	public void insertWithSetter(Map row) {
+	public void insertWithSetter(def row) {
 		Country c = new Country()
 		DomainUtils.copyDomain(c, row)
 		c.save()

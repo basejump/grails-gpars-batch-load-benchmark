@@ -32,7 +32,7 @@ class RegionService {
 		r.save()
 	}
 
-	public void insertWithSetter(Map row) {
+	public void insertWithSetter(def row) {
 		Country country = Country.findByGeoWorldMapId(row['country.id'], [cache: true]);
 		Region r = new Region()
 		DomainUtils.copyDomain(r, row)

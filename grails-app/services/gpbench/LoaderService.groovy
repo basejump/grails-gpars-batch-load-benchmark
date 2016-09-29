@@ -1,6 +1,8 @@
 package gpbench
 
 import grails.transaction.Transactional
+import groovy.sql.GroovyResultSet
+import groovy.sql.GroovyResultSetProxy
 import groovy.sql.GroovyRowResult
 import groovy.sql.Sql
 import org.hibernate.SessionFactory
@@ -10,6 +12,7 @@ import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.datasource.init.ScriptUtils
 
 import java.sql.Connection
+import java.sql.ResultSet
 
 import static groovyx.gpars.GParsPool.withPool
 
@@ -40,9 +43,14 @@ class LoaderService {
 		loadAllFiles('load_SimpleJdbcInsert')
 		loadAllFiles('load_batched_transactions')
 		loadAllFiles('load_batched_transactions_databinding')
-		
+
 		loadAllFiles('load_from_table')
+		loadAllFiles('load_from_table_scrollable_resultset')
 		loadAllFiles('load_from_table_gparse')
+		//loadAllFiles('load_from_table_gparse_scrollable_resultset')
+
+
+
 
 		/*
 		def r = benchmark {
@@ -201,6 +209,27 @@ class LoaderService {
 		}
 	}
 
+
+	def load_from_table_scrollable_resultset(name, csvFile = null) {
+		Sql sql = new Sql(dataSource)
+
+		sql.resultSetConcurrency = java.sql.ResultSet.CONCUR_READ_ONLY
+		sql.withStatement { stmt -> stmt.fetchSize = Integer.MIN_VALUE }
+
+		def service = getService(name)
+
+		int index = 0
+		sql.query("select * from " + "${name}_test".toLowerCase()) { ResultSet resultSet ->
+			GroovyResultSet groovyRS = new GroovyResultSetProxy(resultSet).getImpl()
+			while (groovyRS.next()) {
+				service.insertWithSetter(groovyRS)
+				if (index % batchSize == 0) cleanUpGorm()
+				index++
+			}
+		}
+
+	}
+
 	def load_from_table_gparse(name, csvFile=null) {
 		Sql sql = new Sql(dataSource)
 		def service = getService(name)
@@ -216,6 +245,29 @@ class LoaderService {
 		}
 
 	}
+
+	/*
+	def load_from_table_gparse_scrollable_resultset(name, csvFile=null) {
+		Sql sql = new Sql(dataSource)
+
+		sql.resultSetConcurrency = java.sql.ResultSet.CONCUR_READ_ONLY
+		sql.withStatement{stmt -> stmt.fetchSize = Integer.MIN_VALUE }
+
+		def service = getService(name)
+		withPool(4) {
+			Closure asyncClosure = {def row ->
+				service.insertWithSetter(row)
+			}.async()
+
+			sql.query("select * from " + "${name}_test".toLowerCase()) { ResultSet resultSet ->
+				GroovyResultSet groovyRS = new GroovyResultSetProxy(resultSet).getImpl()
+				while (groovyRS.next()) {
+					println "Inside closure"
+					asyncClosure(groovyRS)
+				}
+			}
+		}
+	}*/
 
 	def insertToTestTable(name,csvFile=null) {
 		def reader = new File("resources/${csvFile?:name}.csv").toCsvMapReader()

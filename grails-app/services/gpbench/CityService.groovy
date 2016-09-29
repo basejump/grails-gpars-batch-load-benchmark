@@ -36,7 +36,7 @@ class CityService {
 		c.save()
 	}
 
-	public void insertWithSetter(Map row) {
+	public void insertWithSetter(def row) {
 		Region r = Region.findByGeoWorldMapId(row['region.id'], [cache: true])
 		City c = new City()
 		DomainUtils.copyDomain(c, row)
