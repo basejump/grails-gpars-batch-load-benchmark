@@ -2,25 +2,23 @@ package gpbench;
 
 class City {
 
-	Integer geoWorldMapId
-
-	Region region
-
-	String code
+	String name
 	String shortCode
 
 	Float latitude
 	Float longitude
 
-	static belongsTo = Region
+	static belongsTo = [region:Region, country:Country]
+
+	static mapping = {
+		id generator: "assigned"
+		cache true
+	}
 
 	static constraints = {
-		code			blank:false
-		//geoWorldMapId 	unique:true
+		name blank: false
 	}
 
-	String toString() {
-		code
-	}
+	String toString() { name }
 
 }
