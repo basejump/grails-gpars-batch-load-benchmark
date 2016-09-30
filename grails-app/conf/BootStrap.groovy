@@ -8,7 +8,6 @@ class BootStrap {
 
 		loaderService.with {
 			truncateTables()
-			loadTestDataForGsqlTest()
 			runBenchMark()
 		}
 

@@ -2,20 +2,22 @@ package gpbench
 
 class Country {
 
-	Integer geoWorldMapId
-	String code
+	String name
+	String capital
 	String fips104
+	String iso2
+	String iso3
 
 	static mapping = {
+		id generator: "assigned"
 		cache true
 	}
 
 	static constraints = {
-		geoWorldMapId 	unique:true
-		code			unique:true
-		fips104			nullable:true
+		name unique: true
+		capital nullable: true
 	}
 
-	String toString() { code }
+	String toString() { name }
 
 }

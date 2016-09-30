@@ -2,27 +2,24 @@ package gpbench
 
 class Region {
 
-	Integer geoWorldMapId;
-
-	Country country
-
+	String name
 	String code
-	String shortCode
+	String admCode
 
-	static belongsTo = Country
+	static belongsTo = [country:Country]
 
 	static mapping = {
 		cache true
-		geoWorldMapId unique:true, index:'geoWorldMapId_Idx'
+		id generator: "assigned"
 		
 	}
 	
-	static constraints = { 
-		code nullable:false 
+	static constraints = {
+		name nullable: false
+		code nullable:false
+		admCode nullable: true
 	}
 
-	String toString() {
-		code
-	}
+	String toString() { code }
 
 }
